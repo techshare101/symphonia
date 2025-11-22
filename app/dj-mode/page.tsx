@@ -272,7 +272,7 @@ export default function DJModePage() {
     }
 
     return (
-        <div className="fixed inset-0 bg-black flex">
+        <div className="fixed inset-0 pt-16 bg-black flex">
             {/* Hidden audio elements */}
             <audio ref={audioRefA} />
             <audio ref={audioRefB} />
