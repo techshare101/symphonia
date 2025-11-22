@@ -20,8 +20,6 @@ export function useBatchProgress(batchId: string | null) {
   useEffect(() => {
     if (!batchId || !user) return;
 
-    // Subscribe to batch progress updates
-    // First verify ownership
     const verifyAccess = async () => {
       try {
         const batchDoc = await getDoc(doc(db, 'batches', batchId));
@@ -32,27 +30,30 @@ export function useBatchProgress(batchId: string | null) {
         if (data.uploadedBy !== user.uid) {
           throw new Error('Permission denied');
         }
+        return true;
       } catch (err) {
         setError(err instanceof Error ? err : new Error('Failed to verify access'));
         return false;
       }
-      return true;
     };
 
-    verifyAccess().then(hasAccess => {
+    let unsubscribe = () => { };
+
+    (async () => {
+      const hasAccess = await verifyAccess();
       if (!hasAccess) return;
-    const unsubscribe = onSnapshot(
-      doc(db, 'batches', batchId),
-      (doc) => {
-        if (doc.exists()) {
-          setProgress(doc.data() as BatchProgress);
+      unsubscribe = onSnapshot(
+        doc(db, 'batches', batchId),
+        (docSnap) => {
+          if (docSnap.exists()) {
+            setProgress(docSnap.data() as BatchProgress);
+          }
+        },
+        (error) => {
+          console.error('Batch progress tracking error:', error);
         }
-      },
-      (error) => {
-        console.error('Batch progress tracking error:', error);
-      }
-    });
-    });
+      );
+    })();
 
     return () => unsubscribe();
   }, [batchId, user]);

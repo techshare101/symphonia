@@ -104,3 +104,47 @@ export async function startBatchProcessing({ trackIds }: BatchProcessingParams) 
     batchId: 'mock-batch-id'
   };
 }
+
+export async function simulateTrackAnalysis(trackId: string) {
+  try {
+    const trackRef = doc(db, 'tracks', trackId);
+
+    // Get track data to use for analysis
+    const trackSnap = await import('firebase/firestore').then(m => m.getDoc(trackRef));
+    const trackData = trackSnap.data();
+    const title = trackData?.title || trackData?.filename || 'Unknown Track';
+
+    // Generate basic parameters
+    const bpm = Math.floor(Math.random() * (130 - 80) + 80);
+    const keys = ['C', 'Cm', 'G', 'Gm', 'D', 'Dm', 'A', 'Am', 'E', 'Em', 'B', 'Bm', 'F#m', 'C#m'];
+    const key = keys[Math.floor(Math.random() * keys.length)];
+    const energy = Math.random() * (1 - 0.4) + 0.4;
+    const duration = 180 + Math.floor(Math.random() * 120);
+
+    // Generate enhanced analysis using the new engine
+    const { generateEnhancedAnalysis } = await import('@/lib/audioAnalysis');
+    const analysis = generateEnhancedAnalysis(title, duration, bpm, key, energy);
+
+    await updateDoc(trackRef, {
+      status: 'complete',
+      bpm,
+      key: analysis.harmonic.musicalKey,
+      energy,
+      duration,
+      analyzedAt: serverTimestamp(),
+
+      // Enhanced metadata
+      energyCurve: analysis.energyCurve,
+      beatGrid: analysis.beatGrid,
+      structure: analysis.structure,
+      harmonic: analysis.harmonic,
+      danceability: analysis.danceability,
+      mood: analysis.mood,
+      peakMoments: analysis.peakMoments,
+      cuePoints: analysis.cuePoints
+    });
+  } catch (error) {
+    console.error('Error simulating analysis:', error);
+    throw error;
+  }
+}

@@ -12,8 +12,9 @@ service firebase.storage {
     }
 
     function isAudioFile(request) {
-      return request.resource.contentType.matches('audio/.*')
-        && request.resource.size < 50 * 1024 * 1024;  // 50MB limit
+      return (request.resource.contentType.matches('audio/.*')
+        || request.resource.contentType.matches('video/.*'))
+        && request.resource.size < 500 * 1024 * 1024;  // 500MB limit for WAV/Video
     }
 
     // User uploaded tracks

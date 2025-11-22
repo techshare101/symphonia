@@ -9,6 +9,9 @@ import { collection, query, where, orderBy, onSnapshot, deleteDoc, doc } from 'f
 import { db } from '@/lib/firebase';
 import { toast } from 'react-hot-toast';
 import Link from 'next/link';
+import { useSearchParams, useRouter } from 'next/navigation';
+import { createTrackRecord } from '@/firebase/utils';
+import { serverTimestamp, updateDoc } from 'firebase/firestore';
 
 interface Track {
   id: string;
@@ -27,6 +30,44 @@ export default function TracksPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [tracks, setTracks] = useState<Track[]>([]);
   const [loading, setLoading] = useState(true);
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const [simulating, setSimulating] = useState(false);
+  useEffect(() => {
+    const simulate = async () => {
+      if (!user || simulating || searchParams.get('simulate') !== 'true') return;
+
+      setSimulating(true);
+
+      try {
+        toast.loading('Scanning uploads folder...', { id: 'sim' });
+
+        const response = await fetch('/api/simulate/scan', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: user.uid })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          toast.success(`Found ${data.scanned} files. Imported ${data.results.filter((r: any) => r.status === 'created').length} new tracks.`, { id: 'sim' });
+          router.replace('/tracks');
+        } else {
+          throw new Error(data.error || 'Scan failed');
+        }
+      } catch (error) {
+        console.error('Simulation failed:', error);
+        toast.error('Simulation failed', { id: 'sim' });
+      } finally {
+        setSimulating(false);
+      }
+    };
+
+    if (user && !loading) {
+      simulate();
+    }
+  }, [user, loading, searchParams, tracks, router, simulating]);
 
   useEffect(() => {
     if (!user) {
