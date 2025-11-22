@@ -162,16 +162,10 @@ export default function DJModePage() {
         }
     };
 
-    // Audio time update handlers
-    useEffect(() => {
-        const audioA = audioRefA.current;
-        if (!audioA) return;
-
-        const handleTimeUpdate = () => {
-            setDeckA(prev => ({ ...prev, currentTime: audioA.currentTime }));
-        };
-
-        audioA.addEventListener('timeupdate', handleTimeUpdate);
+    // Waveform drawing function
+    const drawWaveform = (canvas: HTMLCanvasElement, track: Track, currentTime: number) => {
+        const ctx = canvas.getContext('2d');
+        if (!ctx || !track.energyCurve) return;
 
         const dpr = window.devicePixelRatio || 1;
         const rect = canvas.getBoundingClientRect();
@@ -215,6 +209,31 @@ export default function DJModePage() {
         ctx.stroke();
     };
 
+    // Audio time update handlers
+    useEffect(() => {
+        const audioA = audioRefA.current;
+        if (!audioA) return;
+
+        const handleTimeUpdate = () => {
+            setDeckA(prev => ({ ...prev, currentTime: audioA.currentTime }));
+        };
+
+        audioA.addEventListener('timeupdate', handleTimeUpdate);
+        return () => audioA.removeEventListener('timeupdate', handleTimeUpdate);
+    }, []);
+
+    useEffect(() => {
+        const audioB = audioRefB.current;
+        if (!audioB) return;
+
+        const handleTimeUpdate = () => {
+            setDeckB(prev => ({ ...prev, currentTime: audioB.currentTime }));
+        };
+
+        audioB.addEventListener('timeupdate', handleTimeUpdate);
+        return () => audioB.removeEventListener('timeupdate', handleTimeUpdate);
+    }, []);
+
     // Update waveforms
     useEffect(() => {
         if (canvasRefA.current && deckA.track) {
@@ -227,6 +246,19 @@ export default function DJModePage() {
             drawWaveform(canvasRefB.current, deckB.track, deckB.currentTime);
         }
     }, [deckB.track, deckB.currentTime]);
+
+    // Apply volume changes via DOM API (volume is not a valid React prop)
+    useEffect(() => {
+        if (audioRefA.current) {
+            audioRefA.current.volume = deckA.volume;
+        }
+    }, [deckA.volume]);
+
+    useEffect(() => {
+        if (audioRefB.current) {
+            audioRefB.current.volume = deckB.volume;
+        }
+    }, [deckB.volume]);
 
     if (!user) {
         return (
