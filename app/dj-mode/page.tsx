@@ -172,25 +172,6 @@ export default function DJModePage() {
         };
 
         audioA.addEventListener('timeupdate', handleTimeUpdate);
-        return () => audioA.removeEventListener('timeupdate', handleTimeUpdate);
-    }, []);
-
-    useEffect(() => {
-        const audioB = audioRefB.current;
-        if (!audioB) return;
-
-        const handleTimeUpdate = () => {
-            setDeckB(prev => ({ ...prev, currentTime: audioB.currentTime }));
-        };
-
-        audioB.addEventListener('timeupdate', handleTimeUpdate);
-        return () => audioB.removeEventListener('timeupdate', handleTimeUpdate);
-    }, []);
-
-    // Draw waveform for deck
-    const drawWaveform = (canvas: HTMLCanvasElement, track: Track, currentTime: number) => {
-        const ctx = canvas.getContext('2d');
-        if (!ctx || !track.energyCurve) return;
 
         const dpr = window.devicePixelRatio || 1;
         const rect = canvas.getBoundingClientRect();
@@ -261,8 +242,8 @@ export default function DJModePage() {
     return (
         <div className="fixed inset-0 bg-black flex">
             {/* Hidden audio elements */}
-            <audio ref={audioRefA} volume={deckA.volume} />
-            <audio ref={audioRefB} volume={deckB.volume} />
+            <audio ref={audioRefA} />
+            <audio ref={audioRefB} />
 
             {/* Library Sidebar */}
             <DJLibrarySidebar
