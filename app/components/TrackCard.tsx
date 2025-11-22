@@ -127,6 +127,13 @@ export default function TrackCard({ track, onDelete, onRetry }: TrackCardProps) 
                 <div className="flex gap-2">
                     {track.status === 'complete' && (
                         <>
+                            <a
+                                href={`/tracks/${track.id}/analysis`}
+                                className="px-3 py-1.5 text-xs font-bold text-cyan-400 hover:text-white hover:bg-cyan-500/10 rounded-md transition-colors border border-cyan-500/30 hover:border-cyan-500/50"
+                                title="View Full Analysis"
+                            >
+                                📊 Analysis
+                            </a>
                             <button
                                 className="px-3 py-1.5 text-xs font-bold text-slate-400 hover:text-white hover:bg-white/10 rounded-md transition-colors border border-transparent hover:border-white/10"
                                 title="Download SRT"

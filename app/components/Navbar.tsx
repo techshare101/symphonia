@@ -8,7 +8,8 @@ import {
   CloudArrowUpIcon,
   QueueListIcon,
   UserCircleIcon,
-  ArrowRightOnRectangleIcon
+  ArrowRightOnRectangleIcon,
+  PlayCircleIcon
 } from '@heroicons/react/24/outline';
 
 export default function Navbar() {
@@ -62,6 +63,16 @@ export default function Navbar() {
                 >
                   <QueueListIcon className="w-4 h-4" />
                   Setlist Builder
+                </Link>
+                <Link
+                  href="/dj-mode"
+                  className={`px-3 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2 ${isActive('/dj-mode')
+                    ? 'bg-slate-800 text-white'
+                    : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
+                    }`}
+                >
+                  <PlayCircleIcon className="w-4 h-4" />
+                  DJ Mode
                 </Link>
               </div>
             )}

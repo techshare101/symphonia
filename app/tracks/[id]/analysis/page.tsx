@@ -1,0 +1,435 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import { useParams, useRouter } from 'next/navigation';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import { ArrowLeftIcon, ArrowDownTrayIcon, MusicalNoteIcon } from '@heroicons/react/24/outline';
+import EnergyCurveVisualizer from '@/components/EnergyCurveVisualizer';
+import { MoodQuadrantChart } from '@/components/MoodIndicator';
+import { toast } from 'react-hot-toast';
+
+interface Track {
+    id: string;
+    title: string;
+    artist?: string;
+    bpm?: number;
+    key?: string;
+    energy?: number;
+    duration?: number;
+    danceability?: number;
+    energyCurve?: number[];
+    beatGrid?: { time: number; confidence: number }[];
+    structure?: {
+        intro?: { start: number; end: number };
+        drop?: number;
+        outro?: { start: number; end: number };
+        breakdowns?: { start: number; end: number }[];
+    };
+    harmonic?: {
+        key: string;
+        musicalKey: string;
+        confidence: number;
+        compatible: string[];
+    };
+    mood?: {
+        valence: number;
+        arousal: number;
+        class: string;
+    };
+    peakMoments?: {
+        emotionalPeak: number;
+        breakdown: number;
+        crowdExplosion: number;
+    };
+    cuePoints?: {
+        start: number;
+        mixIn: number;
+        mixOut: number;
+        end: number;
+    };
+}
+
+export default function TrackAnalysisPage() {
+    const params = useParams();
+    const router = useRouter();
+    const [track, setTrack] = useState<Track | null>(null);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        async function fetchTrack() {
+            try {
+                const trackId = params.id as string;
+                const trackDoc = await getDoc(doc(db, 'tracks', trackId));
+
+                if (trackDoc.exists()) {
+                    setTrack({
+                        id: trackDoc.id,
+                        ...trackDoc.data(),
+                        title: trackDoc.data().title || trackDoc.data().filename || 'Untitled'
+                    } as Track);
+                } else {
+                    toast.error('Track not found');
+                    router.push('/tracks');
+                }
+            } catch (error) {
+                console.error('Error fetching track:', error);
+                toast.error('Failed to load track');
+            } finally {
+                setLoading(false);
+            }
+        }
+        fetchTrack();
+    }, [params.id, router]);
+
+    const formatTime = (seconds: number) => {
+        const mins = Math.floor(seconds / 60);
+        const secs = Math.floor(seconds % 60);
+        return `${mins}:${secs.toString().padStart(2, '0')}`;
+    };
+
+    const downloadReport = () => {
+        if (!track) return;
+
+        const report = `
+SYMPHONIA AUDIO ANALYSIS REPORT
+================================
+
+Track: ${track.title}
+Artist: ${track.artist || 'Unknown'}
+Duration: ${formatTime(track.duration || 0)}
+
+BASIC METRICS
+-------------
+BPM: ${track.bpm || 'N/A'}
+Key: ${track.harmonic?.musicalKey || track.key || 'N/A'}
+Camelot: ${track.harmonic?.key || 'N/A'}
+Energy: ${track.energy ? (track.energy * 100).toFixed(1) : 'N/A'}%
+Danceability: ${track.danceability || 'N/A'}/100
+
+HARMONIC ANALYSIS
+-----------------
+Musical Key: ${track.harmonic?.musicalKey || 'N/A'}
+Camelot Key: ${track.harmonic?.key || 'N/A'}
+Confidence: ${track.harmonic?.confidence || 'N/A'}%
+Compatible Keys: ${track.harmonic?.compatible.join(', ') || 'N/A'}
+
+STRUCTURE
+---------
+Intro: ${track.structure?.intro ? `${formatTime(track.structure.intro.start)} - ${formatTime(track.structure.intro.end)}` : 'N/A'}
+Drop: ${track.structure?.drop ? formatTime(track.structure.drop) : 'N/A'}
+Outro: ${track.structure?.outro ? `${formatTime(track.structure.outro.start)} - ${formatTime(track.structure.outro.end)}` : 'N/A'}
+Breakdowns: ${track.structure?.breakdowns?.length || 0}
+
+MOOD & EMOTION
+--------------
+Class: ${track.mood?.class || 'N/A'}
+Valence: ${track.mood?.valence.toFixed(2) || 'N/A'} (${track.mood && track.mood.valence > 0 ? 'Happy' : 'Sad'})
+Arousal: ${track.mood?.arousal.toFixed(2) || 'N/A'} (${track.mood && track.mood.arousal > 0 ? 'Energetic' : 'Calm'})
+
+PEAK MOMENTS
+------------
+Emotional Peak: ${track.peakMoments ? formatTime(track.peakMoments.emotionalPeak) : 'N/A'}
+Breakdown: ${track.peakMoments ? formatTime(track.peakMoments.breakdown) : 'N/A'}
+Crowd Explosion: ${track.peakMoments ? formatTime(track.peakMoments.crowdExplosion) : 'N/A'}
+
+DJ CUE POINTS
+-------------
+Mix In: ${track.cuePoints ? formatTime(track.cuePoints.mixIn) : 'N/A'}
+Mix Out: ${track.cuePoints ? formatTime(track.cuePoints.mixOut) : 'N/A'}
+
+BEAT GRID
+---------
+Total Beats: ${track.beatGrid?.length || 'N/A'}
+Avg Confidence: ${track.beatGrid ? (track.beatGrid.reduce((sum, b) => sum + b.confidence, 0) / track.beatGrid.length * 100).toFixed(1) : 'N/A'}%
+
+Generated by Symphonia Audio Analysis Engine
+        `.trim();
+
+        const blob = new Blob([report], { type: 'text/plain' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${track.title.replace(/[^a-z0-9]/gi, '_')}_analysis.txt`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        toast.success('Report downloaded!');
+    };
+
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center min-h-screen">
+                <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-cyan-500"></div>
+            </div>
+        );
+    }
+
+    if (!track) {
+        return null;
+    }
+
+    return (
+        <div className="max-w-7xl mx-auto pt-8 pb-20">
+            {/* Header */}
+            <div className="mb-8 flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                    <button
+                        onClick={() => router.back()}
+                        className="p-2 rounded-lg hover:bg-white/10 transition-colors"
+                    >
+                        <ArrowLeftIcon className="w-6 h-6 text-slate-400" />
+                    </button>
+                    <div>
+                        <h1 className="text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white via-cyan-200 to-blue-400 text-glow-sm">
+                            Track Analysis
+                        </h1>
+                        <p className="text-slate-400 mt-1">Complete breakdown of audio metadata</p>
+                    </div>
+                </div>
+                <button
+                    onClick={downloadReport}
+                    className="btn-secondary flex items-center gap-2"
+                >
+                    <ArrowDownTrayIcon className="w-5 h-5" />
+                    Download Report
+                </button>
+            </div>
+
+            {/* Track Info Card */}
+            <div className="chrome-card mb-8">
+                <div className="flex items-start gap-6">
+                    <div className="w-24 h-24 rounded-2xl bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center shadow-[0_0_30px_rgba(6,182,212,0.3)]">
+                        <MusicalNoteIcon className="w-12 h-12 text-white" />
+                    </div>
+                    <div className="flex-1">
+                        <h2 className="text-3xl font-bold text-white mb-2">{track.title}</h2>
+                        <p className="text-xl text-slate-400 mb-4">{track.artist || 'Unknown Artist'}</p>
+                        <div className="flex gap-6 text-sm">
+                            <div>
+                                <span className="text-slate-500 uppercase tracking-wider text-xs">Duration</span>
+                                <div className="text-white font-mono font-bold">{formatTime(track.duration || 0)}</div>
+                            </div>
+                            <div>
+                                <span className="text-slate-500 uppercase tracking-wider text-xs">BPM</span>
+                                <div className="text-cyan-400 font-mono font-bold text-glow-sm">{track.bpm || '--'}</div>
+                            </div>
+                            <div>
+                                <span className="text-slate-500 uppercase tracking-wider text-xs">Key</span>
+                                <div className="text-purple-400 font-mono font-bold text-glow-sm">{track.harmonic?.key || track.key || '--'}</div>
+                            </div>
+                            <div>
+                                <span className="text-slate-500 uppercase tracking-wider text-xs">Danceability</span>
+                                <div className="text-yellow-400 font-mono font-bold text-glow-sm">{track.danceability || '--'}</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                {/* Energy Curve */}
+                {track.energyCurve && track.duration && (
+                    <div className="chrome-card lg:col-span-2">
+                        <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+                            <span className="w-2 h-6 bg-cyan-400 rounded-full"></span>
+                            Energy Curve
+                        </h3>
+                        <EnergyCurveVisualizer
+                            energyCurve={track.energyCurve}
+                            duration={track.duration}
+                            structure={track.structure}
+                            height={150}
+                        />
+                    </div>
+                )}
+
+                {/* Harmonic Analysis */}
+                {track.harmonic && (
+                    <div className="chrome-card">
+                        <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+                            <span className="w-2 h-6 bg-purple-400 rounded-full"></span>
+                            Harmonic Analysis
+                        </h3>
+                        <div className="space-y-4">
+                            <div className="flex items-center justify-between p-4 bg-black/40 rounded-xl border border-white/5">
+                                <span className="text-slate-400">Musical Key</span>
+                                <span className="text-white font-bold font-mono">{track.harmonic.musicalKey}</span>
+                            </div>
+                            <div className="flex items-center justify-between p-4 bg-black/40 rounded-xl border border-white/5">
+                                <span className="text-slate-400">Camelot Key</span>
+                                <span className="text-purple-400 font-bold font-mono text-glow-sm">{track.harmonic.key}</span>
+                            </div>
+                            <div className="flex items-center justify-between p-4 bg-black/40 rounded-xl border border-white/5">
+                                <span className="text-slate-400">Confidence</span>
+                                <span className="text-green-400 font-bold">{track.harmonic.confidence.toFixed(1)}%</span>
+                            </div>
+                            <div className="p-4 bg-black/40 rounded-xl border border-white/5">
+                                <div className="text-slate-400 mb-2 text-sm">Compatible Keys</div>
+                                <div className="flex flex-wrap gap-2">
+                                    {track.harmonic.compatible.map(key => (
+                                        <span key={key} className="px-3 py-1 bg-purple-500/20 border border-purple-500/30 text-purple-400 rounded-lg font-mono text-sm">
+                                            {key}
+                                        </span>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Mood Analysis */}
+                {track.mood && (
+                    <div className="chrome-card">
+                        <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+                            <span className="w-2 h-6 bg-yellow-400 rounded-full"></span>
+                            Mood Analysis
+                        </h3>
+                        <MoodQuadrantChart mood={track.mood} />
+                        <div className="mt-4 space-y-3">
+                            <div className="flex items-center justify-between p-3 bg-black/40 rounded-xl border border-white/5">
+                                <span className="text-slate-400 text-sm">Mood Class</span>
+                                <span className="text-white font-bold capitalize">{track.mood.class}</span>
+                            </div>
+                            <div className="flex items-center justify-between p-3 bg-black/40 rounded-xl border border-white/5">
+                                <span className="text-slate-400 text-sm">Valence</span>
+                                <span className="text-white font-mono">{track.mood.valence.toFixed(2)} <span className="text-slate-500 text-xs">({track.mood.valence > 0 ? 'Happy' : 'Sad'})</span></span>
+                            </div>
+                            <div className="flex items-center justify-between p-3 bg-black/40 rounded-xl border border-white/5">
+                                <span className="text-slate-400 text-sm">Arousal</span>
+                                <span className="text-white font-mono">{track.mood.arousal.toFixed(2)} <span className="text-slate-500 text-xs">({track.mood.arousal > 0 ? 'Energetic' : 'Calm'})</span></span>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Structure Breakdown */}
+                {track.structure && (
+                    <div className="chrome-card">
+                        <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+                            <span className="w-2 h-6 bg-cyan-400 rounded-full"></span>
+                            Track Structure
+                        </h3>
+                        <div className="space-y-3">
+                            {track.structure.intro && (
+                                <div className="p-4 bg-cyan-500/10 border border-cyan-500/30 rounded-xl">
+                                    <div className="text-cyan-400 font-bold mb-1">Intro</div>
+                                    <div className="text-white font-mono text-sm">
+                                        {formatTime(track.structure.intro.start)} - {formatTime(track.structure.intro.end)}
+                                    </div>
+                                </div>
+                            )}
+                            {track.structure.drop && (
+                                <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-xl">
+                                    <div className="text-red-400 font-bold mb-1">Drop</div>
+                                    <div className="text-white font-mono text-sm">{formatTime(track.structure.drop)}</div>
+                                </div>
+                            )}
+                            {track.structure.breakdowns && track.structure.breakdowns.length > 0 && (
+                                <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl">
+                                    <div className="text-amber-400 font-bold mb-2">Breakdowns ({track.structure.breakdowns.length})</div>
+                                    <div className="space-y-1">
+                                        {track.structure.breakdowns.map((breakdown, idx) => (
+                                            <div key={idx} className="text-white font-mono text-sm">
+                                                {idx + 1}. {formatTime(breakdown.start)} - {formatTime(breakdown.end)}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                            {track.structure.outro && (
+                                <div className="p-4 bg-purple-500/10 border border-purple-500/30 rounded-xl">
+                                    <div className="text-purple-400 font-bold mb-1">Outro</div>
+                                    <div className="text-white font-mono text-sm">
+                                        {formatTime(track.structure.outro.start)} - {formatTime(track.structure.outro.end)}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
+
+                {/* Peak Moments */}
+                {track.peakMoments && (
+                    <div className="chrome-card">
+                        <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+                            <span className="w-2 h-6 bg-yellow-400 rounded-full"></span>
+                            Peak Moments
+                        </h3>
+                        <div className="space-y-3">
+                            <div className="p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-xl">
+                                <div className="text-yellow-400 font-bold mb-1">🎉 Emotional Peak</div>
+                                <div className="text-white font-mono text-sm">{formatTime(track.peakMoments.emotionalPeak)}</div>
+                            </div>
+                            <div className="p-4 bg-blue-500/10 border border-blue-500/30 rounded-xl">
+                                <div className="text-blue-400 font-bold mb-1">🌙 Breakdown Valley</div>
+                                <div className="text-white font-mono text-sm">{formatTime(track.peakMoments.breakdown)}</div>
+                            </div>
+                            <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-xl">
+                                <div className="text-red-400 font-bold mb-1">💥 Crowd Explosion</div>
+                                <div className="text-white font-mono text-sm">{formatTime(track.peakMoments.crowdExplosion)}</div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* DJ Cue Points */}
+                {track.cuePoints && (
+                    <div className="chrome-card">
+                        <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+                            <span className="w-2 h-6 bg-green-400 rounded-full"></span>
+                            DJ Cue Points
+                        </h3>
+                        <div className="space-y-3">
+                            <div className="p-4 bg-green-500/10 border border-green-500/30 rounded-xl">
+                                <div className="text-green-400 font-bold mb-1">▶ Mix In</div>
+                                <div className="text-white font-mono text-sm">{formatTime(track.cuePoints.mixIn)}</div>
+                                <div className="text-slate-400 text-xs mt-1">Suggested entry point for mixing</div>
+                            </div>
+                            <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-xl">
+                                <div className="text-red-400 font-bold mb-1">◼ Mix Out</div>
+                                <div className="text-white font-mono text-sm">{formatTime(track.cuePoints.mixOut)}</div>
+                                <div className="text-slate-400 text-xs mt-1">Suggested exit point for mixing</div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Beat Grid Stats */}
+                {track.beatGrid && track.beatGrid.length > 0 && (
+                    <div className="chrome-card">
+                        <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+                            <span className="w-2 h-6 bg-cyan-400 rounded-full"></span>
+                            Beat Grid
+                        </h3>
+                        <div className="space-y-4">
+                            <div className="flex items-center justify-between p-4 bg-black/40 rounded-xl border border-white/5">
+                                <span className="text-slate-400">Total Beats</span>
+                                <span className="text-white font-bold font-mono">{track.beatGrid.length}</span>
+                            </div>
+                            <div className="flex items-center justify-between p-4 bg-black/40 rounded-xl border border-white/5">
+                                <span className="text-slate-400">Avg Confidence</span>
+                                <span className="text-green-400 font-bold">
+                                    {(track.beatGrid.reduce((sum, b) => sum + b.confidence, 0) / track.beatGrid.length * 100).toFixed(1)}%
+                                </span>
+                            </div>
+                            <div className="p-4 bg-black/40 rounded-xl border border-white/5">
+                                <div className="text-slate-400 mb-2 text-sm">First 10 Beats</div>
+                                <div className="space-y-1 max-h-40 overflow-y-auto custom-scrollbar">
+                                    {track.beatGrid.slice(0, 10).map((beat, idx) => (
+                                        <div key={idx} className="flex items-center justify-between text-xs font-mono">
+                                            <span className="text-slate-500">Beat {idx + 1}</span>
+                                            <span className="text-white">{formatTime(beat.time)}</span>
+                                            <span className="text-cyan-400">{(beat.confidence * 100).toFixed(0)}%</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+}
