@@ -41,7 +41,7 @@ export class TransitionEngine {
             arcAwareness: false,
             transitionCurve: 'smooth',
             phraseBars: 8,
-            tumbaoPres ervation: true,
+            tumbaoPreservation: true,
             montunoAlignment: true
         },
         [AutoDJMode.CINEMATIC_AI]: {
