@@ -44,6 +44,20 @@ export enum AutoDJMode {
 
 export interface TransitionProfile {
     crossfadeDuration: number;
+    phraseAlignment: boolean;
+    claveDetection: boolean;
+    energyMatching: 'soft' | 'hard';
+    arcAwareness: boolean;
+    transitionCurve: 'linear' | 'smooth' | 'exponential';
+    phraseBars: number;
+    tumbaoPreservation?: boolean;
+    montunoAlignment?: boolean;
+    emotionalMapping?: boolean;
+}
+
+export interface TransitionPlan {
+    mixOutPoint: number;      // When to start fading out Track A (seconds)
+    mixInPoint: number;       // When to start fading in Track B (seconds)
     crossfadeDuration: number;
     curve: 'linear' | 'smooth' | 'exponential';
     beatAlignment: number;    // Offset for beat matching (seconds)
