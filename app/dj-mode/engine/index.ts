@@ -12,15 +12,13 @@ export { TransportController, DeckState } from './TransportController';
 export { TransitionEngine } from './TransitionEngine';
 export { QueueNavigator, type ArcPosition } from './QueueNavigator';
 export { AutoDJMasterController, type AutoDJConfig } from './AutoDJMasterController';
+export { AutoDJMode } from './types';
 
 export type {
     Track,
-    AutoDJMode,
     TransitionProfile,
     TransitionPlan,
     StructureMap,
     ClavePattern,
     SalsaAnalysis
 } from './types';
-
-export { AutoDJMode } from './types';

@@ -2,12 +2,13 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { PlayIcon, PauseIcon, ForwardIcon, BackwardIcon, SpeakerWaveIcon, ArrowPathIcon, ArrowLeftIcon, QueueListIcon } from '@heroicons/react/24/solid';
+import { PlayIcon, PauseIcon, ForwardIcon, BackwardIcon, SpeakerWaveIcon, ArrowPathIcon, ArrowLeftIcon, QueueListIcon, SparklesIcon } from '@heroicons/react/24/solid';
 import { useAuth } from '@/providers/AuthProvider';
 import { toast } from 'react-hot-toast';
 import DJLibrarySidebar from './components/DJLibrarySidebar';
 import SetlistLoader from './components/SetlistLoader';
 import DeckQueue from './components/DeckQueue';
+import { AutoDJMasterController, AutoDJMode } from './engine';
 
 interface Track {
     id: string;
@@ -78,6 +79,11 @@ export default function DJModePage() {
     const [showBeatGrid, setShowBeatGrid] = useState(true);
     const [showCuePoints, setShowCuePoints] = useState(true);
     const [showStructure, setShowStructure] = useState(true);
+
+    // Auto-DJ state
+    const [autoDJEnabled, setAutoDJEnabled] = useState(false);
+    const [autoDJMode, setAutoDJMode] = useState<AutoDJMode>(AutoDJMode.LATIN_SALSA);
+    const autoDJController = useRef<AutoDJMasterController | null>(null);
 
     // Audio refs
     const audioRefA = useRef<HTMLAudioElement>(null);
@@ -159,6 +165,89 @@ export default function DJModePage() {
         } else {
             audioRef.play();
             setDeck({ ...deckState, isPlaying: true });
+        }
+    };
+
+    // Toggle Auto-DJ mode
+    const toggleAutoDJ = async () => {
+        if (!autoDJEnabled) {
+            // Enable Auto-DJ
+            if (queue.length === 0) {
+                toast.error('Load a setlist first to use Auto-DJ');
+                return;
+            }
+
+            if (!audioRefA.current || !audioRefB.current) {
+                toast.error('Audio elements not ready');
+                return;
+            }
+
+            // Initialize controller if needed
+            if (!autoDJController.current) {
+                autoDJController.current = new AutoDJMasterController({
+                    mode: autoDJMode,
+                    enabled: true,
+                    onTransition: (fromDeck, toDeck) => {
+                        toast.success(`Transitioning from Deck ${fromDeck} to Deck ${toDeck}`);
+                    },
+                    onTrackChange: (track, deck) => {
+                        console.log(`Auto-DJ loaded ${track.title} to Deck ${deck}`);
+                    },
+                    onComplete: () => {
+                        toast.success('Setlist complete!');
+                        setAutoDJEnabled(false);
+                    }
+                });
+            }
+
+            // Start Auto-DJ
+            try {
+                await autoDJController.current.start(
+                    queue,
+                    setlistInfo?.arcType,
+                    audioRefA.current,
+                    audioRefB.current,
+                    (track) => setDeckA(prev => ({ ...prev, track })),
+                    (track) => setDeckB(prev => ({ ...prev, track }))
+                );
+                setAutoDJEnabled(true);
+                toast.success(`Auto-DJ activated in ${getModeLabel(autoDJMode)} mode`);
+            } catch (error) {
+                console.error('Failed to start Auto-DJ:', error);
+                toast.error('Failed to start Auto-DJ');
+            }
+        } else {
+            // Disable Auto-DJ
+            if (autoDJController.current) {
+                autoDJController.current.stop();
+            }
+            setAutoDJEnabled(false);
+            toast.success('Auto-DJ deactivated');
+        }
+    };
+
+    // Change Auto-DJ mode
+    const handleModeChange = (mode: AutoDJMode) => {
+        setAutoDJMode(mode);
+        if (autoDJController.current) {
+            autoDJController.current.setMode(mode);
+        }
+        toast.success(`Switched to ${getModeLabel(mode)} mode`);
+    };
+
+    // Get mode label for display
+    const getModeLabel = (mode: AutoDJMode): string => {
+        switch (mode) {
+            case AutoDJMode.SMOOTH_CLUB:
+                return 'Smooth Club';
+            case AutoDJMode.HIGH_ENERGY:
+                return 'High Energy';
+            case AutoDJMode.LATIN_SALSA:
+                return 'Latin Salsa';
+            case AutoDJMode.CINEMATIC_AI:
+                return 'Cinematic AI';
+            default:
+                return 'Unknown';
         }
     };
 
@@ -307,13 +396,40 @@ export default function DJModePage() {
                             </span>
                         )}
                     </div>
-                    <button
-                        onClick={() => setShowSetlistLoader(true)}
-                        className="px-4 py-2 bg-gradient-to-r from-cyan-600 to-blue-600 text-white text-sm font-bold rounded-lg hover:from-cyan-500 hover:to-blue-500 transition-all flex items-center gap-2"
-                    >
-                        <QueueListIcon className="w-5 h-5" />
-                        Load Setlist
-                    </button>
+                    <div className="flex items-center gap-3">
+                        {/* Auto-DJ Mode Selector */}
+                        <select
+                            value={autoDJMode}
+                            onChange={(e) => handleModeChange(e.target.value as AutoDJMode)}
+                            className="px-3 py-2 bg-black/60 border border-white/20 text-white text-sm rounded-lg focus:outline-none focus:border-cyan-400 transition-colors"
+                        >
+                            <option value={AutoDJMode.LATIN_SALSA}>🎺 Latin Salsa</option>
+                            <option value={AutoDJMode.SMOOTH_CLUB}>🍸 Smooth Club</option>
+                            <option value={AutoDJMode.HIGH_ENERGY}>⚡ High Energy</option>
+                            <option value={AutoDJMode.CINEMATIC_AI}>🎬 Cinematic AI</option>
+                        </select>
+
+                        {/* Auto-DJ Toggle */}
+                        <button
+                            onClick={toggleAutoDJ}
+                            disabled={queue.length === 0}
+                            className={`px-4 py-2 text-sm font-bold rounded-lg transition-all flex items-center gap-2 ${autoDJEnabled
+                                    ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white hover:from-purple-500 hover:to-pink-500 shadow-[0_0_20px_rgba(168,85,247,0.4)]'
+                                    : 'bg-gradient-to-r from-cyan-600/50 to-blue-600/50 text-white hover:from-cyan-600 hover:to-blue-600 disabled:opacity-30 disabled:cursor-not-allowed'
+                                }`}
+                        >
+                            <SparklesIcon className="w-5 h-5" />
+                            {autoDJEnabled ? 'Auto-DJ ON' : 'Auto-DJ OFF'}
+                        </button>
+
+                        <button
+                            onClick={() => setShowSetlistLoader(true)}
+                            className="px-4 py-2 bg-gradient-to-r from-cyan-600 to-blue-600 text-white text-sm font-bold rounded-lg hover:from-cyan-500 hover:to-blue-500 transition-all flex items-center gap-2"
+                        >
+                            <QueueListIcon className="w-5 h-5" />
+                            Load Setlist
+                        </button>
+                    </div>
                 </div>
 
                 {/* Decks */}
