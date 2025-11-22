@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { PlayIcon, PauseIcon, ForwardIcon, BackwardIcon, SpeakerWaveIcon, ArrowPathIcon } from '@heroicons/react/24/solid';
+import { useRouter } from 'next/navigation';
+import { PlayIcon, PauseIcon, ForwardIcon, BackwardIcon, SpeakerWaveIcon, ArrowPathIcon, ArrowLeftIcon } from '@heroicons/react/24/solid';
 import { useAuth } from '@/providers/AuthProvider';
 import { collection, query, where, getDocs, orderBy } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
@@ -38,6 +39,7 @@ interface Track {
 
 export default function DJModePage() {
     const { user } = useAuth();
+    const router = useRouter();
     const [tracks, setTracks] = useState<Track[]>([]);
     const [currentTrack, setCurrentTrack] = useState<Track | null>(null);
     const [nextTrack, setNextTrack] = useState<Track | null>(null);
@@ -363,9 +365,18 @@ export default function DJModePage() {
 
             {/* Top Bar */}
             <div className="p-6 flex justify-between items-center bg-black/40 backdrop-blur-md border-b border-white/10">
-                <h1 className="text-2xl font-bold text-white tracking-widest uppercase">
-                    <span className="text-cyan-400">DJ</span> Mode
-                </h1>
+                <div className="flex items-center gap-4">
+                    <button
+                        onClick={() => router.back()}
+                        className="p-2 rounded-lg hover:bg-white/10 transition-colors text-slate-400 hover:text-white"
+                        title="Go Back"
+                    >
+                        <ArrowLeftIcon className="w-6 h-6" />
+                    </button>
+                    <h1 className="text-2xl font-bold text-white tracking-widest uppercase">
+                        <span className="text-cyan-400">DJ</span> Mode
+                    </h1>
+                </div>
                 <div className="flex items-center gap-4">
                     <div className="px-3 py-1 rounded-full bg-red-500/20 border border-red-500/50 text-red-400 text-xs font-bold animate-pulse">
                         LIVE
