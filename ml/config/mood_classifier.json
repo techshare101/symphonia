@@ -1,0 +1,28 @@
+{
+    "features": {
+        "sample_rate": 22050,
+        "duration": 30,
+        "n_mels": 128,
+        "fmax": 8000,
+        "hop_length": 512,
+        "n_mfcc": 13
+    },
+    "model": {
+        "learning_rate": 0.001,
+        "batch_size": 32,
+        "epochs": 100,
+        "test_size": 0.2
+    },
+    "mood_ranges": {
+        "valence": {
+            "min": 0.0,
+            "max": 1.0,
+            "description": "Emotional positivity"
+        },
+        "arousal": {
+            "min": 0.0,
+            "max": 1.0,
+            "description": "Energy/intensity"
+        }
+    }
+}

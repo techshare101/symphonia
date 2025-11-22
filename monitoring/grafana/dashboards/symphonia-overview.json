@@ -1,0 +1,135 @@
+{
+    "annotations": {
+        "list": []
+    },
+    "title": "Symphonia Overview",
+    "description": "Overview of Symphonia audio analysis and processing metrics",
+    "panels": [
+        {
+            "title": "Queue Size",
+            "type": "timeseries",
+            "targets": [
+                {
+                    "expr": "symphonia_queue_size",
+                    "legendFormat": "Queue Size"
+                }
+            ],
+            "yaxes": [
+                {
+                    "format": "short",
+                    "label": "Items in Queue"
+                }
+            ]
+        },
+        {
+            "title": "Processing Time",
+            "type": "timeseries",
+            "targets": [
+                {
+                    "expr": "rate(symphonia_processing_time_seconds[5m])",
+                    "legendFormat": "Processing Time"
+                }
+            ],
+            "yaxes": [
+                {
+                    "format": "s",
+                    "label": "Time"
+                }
+            ]
+        },
+        {
+            "title": "ML Model Performance",
+            "type": "gauge",
+            "targets": [
+                {
+                    "expr": "symphonia_ml_accuracy",
+                    "legendFormat": "Model Accuracy"
+                }
+            ],
+            "options": {
+                "min": 0,
+                "max": 1,
+                "thresholds": [
+                    {
+                        "value": 0.7,
+                        "color": "red"
+                    },
+                    {
+                        "value": 0.8,
+                        "color": "yellow"
+                    },
+                    {
+                        "value": 0.9,
+                        "color": "green"
+                    }
+                ]
+            }
+        },
+        {
+            "title": "Resource Usage",
+            "type": "timeseries",
+            "targets": [
+                {
+                    "expr": "sum(container_cpu_usage_seconds_total{app=\"symphonia\"}) by (component)",
+                    "legendFormat": "CPU - {{component}}"
+                },
+                {
+                    "expr": "sum(container_memory_usage_bytes{app=\"symphonia\"}) by (component)",
+                    "legendFormat": "Memory - {{component}}"
+                }
+            ]
+        },
+        {
+            "title": "Error Rates",
+            "type": "timeseries",
+            "targets": [
+                {
+                    "expr": "rate(symphonia_errors_total[5m])",
+                    "legendFormat": "General Errors"
+                },
+                {
+                    "expr": "rate(symphonia_ml_prediction_errors_total[5m])",
+                    "legendFormat": "ML Errors"
+                }
+            ]
+        },
+        {
+            "title": "Pod Status",
+            "type": "stat",
+            "targets": [
+                {
+                    "expr": "sum(up{app=\"symphonia\"}) by (component)",
+                    "legendFormat": "{{component}}"
+                }
+            ]
+        },
+        {
+            "title": "Audio Analysis Metrics",
+            "type": "timeseries",
+            "targets": [
+                {
+                    "expr": "symphonia_genre_detection_confidence",
+                    "legendFormat": "Genre Detection"
+                },
+                {
+                    "expr": "symphonia_mood_detection_confidence",
+                    "legendFormat": "Mood Detection"
+                }
+            ]
+        }
+    ],
+    "templating": {
+        "list": [
+            {
+                "name": "component",
+                "type": "query",
+                "query": "label_values(up{app=\"symphonia\"}, component)"
+            }
+        ]
+    },
+    "time": {
+        "from": "now-6h",
+        "to": "now"
+    },
+    "refresh": "10s"
+}

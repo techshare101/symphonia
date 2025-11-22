@@ -1,0 +1,102 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: symphonia-audio-analysis
+  labels:
+    app: symphonia
+    component: audio-analysis
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: symphonia
+      component: audio-analysis
+  template:
+    metadata:
+      labels:
+        app: symphonia
+        component: audio-analysis
+    spec:
+      containers:
+      - name: audio-analysis
+        image: gcr.io/PROJECT_ID/symphonia-audio-analysis:latest
+        resources:
+          requests:
+            memory: "2Gi"
+            cpu: "1"
+          limits:
+            memory: "4Gi"
+            cpu: "2"
+        env:
+        - name: AUTH_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: symphonia-secrets
+              key: audio-analysis-token
+        - name: TF_NUM_THREADS
+          value: "2"
+        ports:
+        - containerPort: 8080
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        volumeMounts:
+        - name: models
+          mountPath: /app/models
+      volumes:
+      - name: models
+        persistentVolumeClaim:
+          claimName: symphonia-models
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: symphonia-audio-analysis
+spec:
+  selector:
+    app: symphonia
+    component: audio-analysis
+  ports:
+  - port: 80
+    targetPort: 8080
+  type: ClusterIP
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: symphonia-audio-analysis
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: symphonia-audio-analysis
+  minReplicas: 3
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: symphonia-models
+spec:
+  accessModes:
+    - ReadOnlyMany
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: standard

@@ -1,0 +1,118 @@
+# MLflow Model Registry Configuration
+
+registry:
+  storage:
+    uri: "gs://symphonia-model-registry"
+    
+  versioning:
+    strategy: "semantic"  # semantic versioning for model versions
+    auto_increment: true
+    
+  staging:
+    promotion_criteria:
+      min_accuracy: 0.85
+      min_f1: 0.80
+      max_latency_ms: 100
+      required_tests: ["unit", "integration"]
+    auto_promote: false
+    
+  production:
+    promotion_criteria:
+      min_accuracy: 0.90
+      min_f1: 0.85
+      max_latency_ms: 50
+      required_tests: ["unit", "integration", "stress"]
+    auto_promote: false
+    rollback_threshold:
+      accuracy_drop: 0.05
+      error_rate_increase: 0.02
+      
+  models:
+    genre_classifier:
+      versions:
+        retention: 5  # keep last 5 versions
+        archive_older: true
+      metadata:
+        description: "Music genre classification model"
+        owner: "ML Team"
+        repository: "github.com/symphonia/models"
+        
+    mood_classifier:
+      versions:
+        retention: 5
+        archive_older: true
+      metadata:
+        description: "Music mood/emotion classification model"
+        owner: "ML Team"
+        repository: "github.com/symphonia/models"
+        
+  validation:
+    required_metrics:
+      - accuracy
+      - precision
+      - recall
+      - f1
+      - latency
+    required_artifacts:
+      - model.pkl
+      - requirements.txt
+      - metadata.json
+    required_tags:
+      - version
+      - git_commit
+      - training_date
+      
+  deployment:
+    strategies:
+      - name: "blue_green"
+        default: true
+        config:
+          validation_period: "1h"
+          rollback_threshold: 0.02
+      - name: "canary"
+        config:
+          initial_weight: 0.1
+          increment: 0.2
+          interval: "30m"
+          
+  monitoring:
+    metrics:
+      - name: prediction_accuracy
+        threshold: 0.85
+        window: "1h"
+      - name: latency_p95
+        threshold: 100  # ms
+        window: "5m"
+      - name: error_rate
+        threshold: 0.01
+        window: "5m"
+        
+    alerts:
+      slack_channel: "#ml-alerts"
+      email: "ml-team@symphonia.ai"
+      pagerduty_integration_key: "{{PAGERDUTY_KEY}}"
+      
+  access_control:
+    roles:
+      - name: "viewer"
+        permissions: ["read", "download"]
+      - name: "developer"
+        permissions: ["read", "download", "upload", "stage"]
+      - name: "admin"
+        permissions: ["*"]
+    
+    teams:
+      ml_team:
+        role: "admin"
+      data_scientists:
+        role: "developer"
+      engineers:
+        role: "viewer"
+        
+  api:
+    rate_limits:
+      predictions: 1000  # requests per minute
+      training: 10      # requests per hour
+    timeouts:
+      prediction: 5     # seconds
+      training: 3600    # seconds

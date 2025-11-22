@@ -1,0 +1,11 @@
+1
+00:00:20,000 --> 00:00:25,000
+EN: So wake me up when it's all over
+FR: Réveille-moi quand tout sera fini
+ES: Despiértame cuando todo haya terminado
+
+2
+00:01:50,000 --> 00:01:55,000
+EN: When I'm wiser and I'm older
+FR: Quand je serai plus sage et plus vieux
+ES: Cuando sea más sabio y mayor

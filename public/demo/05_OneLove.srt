@@ -1,0 +1,11 @@
+1
+00:00:30,000 --> 00:00:35,000
+EN: One love, one heart, let's get together and feel alright
+FR: Un amour, un cœur, réunissons-nous et sentons-nous bien
+ES: Un amor, un corazón, reunámonos y sintámonos bien
+
+2
+00:01:10,000 --> 00:01:15,000
+EN: Give thanks and praise to the Lord
+FR: Rendons grâce et louange au Seigneur
+ES: Demos gracias y alabanzas al Señor

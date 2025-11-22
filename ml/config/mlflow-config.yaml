@@ -1,0 +1,102 @@
+tracking_server:
+  uri: "http://mlflow.symphonia:5000"
+  
+artifacts:
+  store: "gs://symphonia-ml-artifacts"
+  
+experiments:
+  genre_classifier:
+    name: "genre_classifier"
+    tags:
+      type: "audio_classification"
+      target: "genre"
+    metrics:
+      - accuracy
+      - precision
+      - recall
+      - f1
+    hyperparameters:
+      learning_rate:
+        - 0.001
+        - 0.0005
+        - 0.0001
+      batch_size:
+        - 32
+        - 64
+        - 128
+      dropout_rate:
+        - 0.3
+        - 0.4
+        - 0.5
+        
+  mood_classifier:
+    name: "mood_classifier"
+    tags:
+      type: "audio_regression"
+      target: "valence_arousal"
+    metrics:
+      - mae
+      - mse
+      - r2
+    hyperparameters:
+      learning_rate:
+        - 0.001
+        - 0.0005
+        - 0.0001
+      batch_size:
+        - 32
+        - 64
+      hidden_layers:
+        - [512, 256]
+        - [1024, 512, 256]
+        
+models:
+  genre:
+    architectures:
+      - name: "dense_net"
+        layers: [512, 256, 128]
+      - name: "resnet"
+        blocks: 3
+      - name: "transformer"
+        heads: 4
+        
+  mood:
+    architectures:
+      - name: "dense_net"
+        layers: [512, 256]
+      - name: "lstm"
+        units: 128
+        
+ensembles:
+  genre:
+    models:
+      - dense_net
+      - resnet
+    voting: "soft"
+    
+  mood:
+    models:
+      - dense_net
+      - lstm
+    averaging: "weighted"
+    
+cross_validation:
+  n_folds: 5
+  stratify: true
+  shuffle: true
+  
+evaluation:
+  test_size: 0.2
+  metrics_threshold:
+    accuracy: 0.85
+    f1: 0.80
+    mae: 0.15
+    
+monitoring:
+  tracking_metrics:
+    - model_performance
+    - training_time
+    - resource_usage
+  alert_thresholds:
+    accuracy_drop: 0.05
+    memory_usage: 0.90

@@ -1,0 +1,158 @@
+global:
+  environment: production
+  domain: symphonia.ai
+  
+api:
+  replicas: 3
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: 2000m
+      memory: 4Gi
+  autoscaling:
+    minReplicas: 3
+    maxReplicas: 10
+  ingress:
+    annotations:
+      nginx.ingress.kubernetes.io/ssl-redirect: "true"
+      nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+      nginx.ingress.kubernetes.io/proxy-body-size: "100m"
+      nginx.ingress.kubernetes.io/proxy-connect-timeout: "300"
+      nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+      nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+
+worker:
+  replicas: 2
+  resources:
+    requests:
+      cpu: 1000m
+      memory: 2Gi
+    limits:
+      cpu: 4000m
+      memory: 8Gi
+  autoscaling:
+    minReplicas: 2
+    maxReplicas: 15
+  queue:
+    size: 20000
+
+ml:
+  replicas: 2
+  resources:
+    requests:
+      cpu: 2000m
+      memory: 4Gi
+    limits:
+      cpu: 8000m
+      memory: 16Gi
+  autoscaling:
+    minReplicas: 2
+    maxReplicas: 8
+  gpu:
+    enabled: true
+    count: 2
+
+monitoring:
+  prometheus:
+    retention: 30d
+    storageSize: 100Gi
+  grafana:
+    persistence:
+      size: 20Gi
+  alertmanager:
+    pagerduty:
+      enabled: true
+
+mlflow:
+  tracking:
+    backend: postgresql
+    artifacts:
+      storage: gcs
+      bucket: symphonia-ml-artifacts-prod
+  postgresql:
+    persistence:
+      size: 50Gi
+    replication:
+      enabled: true
+      replicas: 2
+
+storage:
+  redis:
+    persistence:
+      size: 20Gi
+    cluster:
+      enabled: true
+      replicas: 3
+  postgresql:
+    persistence:
+      size: 100Gi
+    replication:
+      enabled: true
+      replicas: 2
+  minio:
+    persistence:
+      size: 500Gi
+
+logging:
+  elasticsearch:
+    replicas: 3
+    storage:
+      size: 200Gi
+    resources:
+      requests:
+        cpu: 1000m
+        memory: 4Gi
+      limits:
+        cpu: 2000m
+        memory: 8Gi
+
+backup:
+  enabled: true
+  schedule: "0 1 * * *"
+  retention: 90d
+  destinations:
+    - s3:
+        bucket: symphonia-backups-prod
+        region: us-west-2
+    - gcs:
+        bucket: symphonia-backups-prod
+
+security:
+  networkPolicy:
+    enabled: true
+  podSecurityPolicy:
+    enabled: true
+  securityContext:
+    runAsUser: 1000
+    runAsGroup: 1000
+    fsGroup: 1000
+
+secrets:
+  provider: aws-secrets-manager
+  region: us-west-2
+
+resourceQuotas:
+  enabled: true
+  hard:
+    requests.cpu: "40"
+    requests.memory: 80Gi
+    limits.cpu: "80"
+    limits.memory: 160Gi
+    requests.storage: 1000Gi
+
+hpa:
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80

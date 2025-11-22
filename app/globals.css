@@ -1,0 +1,83 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Base */
+  --background: #0a0118;
+  --foreground: #f8fafc;
+
+  /* Brand Colors */
+  --primary: #00f3ff;
+  --secondary: #d946ef;
+  --accent: #fbbf24;
+  --surface: #1e293b;
+}
+
+body {
+  color: var(--foreground);
+  background: radial-gradient(circle at 50% 0%, #2e1065 0%, #0a0118 60%, #000000 100%);
+  background-attachment: fixed;
+  font-family: 'Inter', sans-serif;
+  overflow-x: hidden;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+@layer utilities {
+  .text-glow {
+    text-shadow: 0 0 20px currentColor;
+  }
+
+  .text-glow-sm {
+    text-shadow: 0 0 10px currentColor;
+  }
+
+  .bg-glass {
+    @apply bg-slate-900/40 backdrop-blur-xl border border-white/10;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply relative overflow-hidden px-6 py-3 bg-transparent text-cyan-400 font-bold uppercase tracking-wider border border-cyan-500/50 rounded-lg transition-all duration-300 hover:bg-cyan-500/10 hover:shadow-neon-blue hover:border-cyan-400;
+  }
+
+  .btn-secondary {
+    @apply px-6 py-3 bg-white/5 hover:bg-white/10 text-white rounded-lg transition-all border border-white/10 hover:border-white/20 font-medium backdrop-blur-sm;
+  }
+
+  /* Chrome Glass Card */
+  .chrome-card {
+    @apply bg-gradient-to-br from-white/5 to-white/0 border border-white/10 rounded-2xl backdrop-blur-2xl shadow-2xl shadow-black/50 relative overflow-hidden;
+  }
+
+  .chrome-card::before {
+    content: '';
+    @apply absolute inset-0 bg-gradient-to-br from-white/10 to-transparent opacity-0 transition-opacity duration-500 pointer-events-none;
+  }
+
+  .chrome-card:hover::before {
+    @apply opacity-100;
+  }
+
+  .input-field {
+    @apply w-full px-4 py-3 bg-black/20 border border-white/10 rounded-xl focus:ring-2 focus:ring-cyan-500/50 focus:border-cyan-500/50 outline-none transition-all placeholder:text-slate-600 text-white backdrop-blur-md;
+  }
+}

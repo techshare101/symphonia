@@ -1,0 +1,11 @@
+1
+00:00:15,000 --> 00:00:20,000
+EN: Lights will guide you home
+FR: Les lumières te ramèneront à la maison
+ES: Las luces te guiarán a casa
+
+2
+00:01:30,000 --> 00:01:35,000
+EN: And ignite your bones
+FR: Et enflammer tes os
+ES: Y encender tus huesos

@@ -1,0 +1,195 @@
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: symphonia-audio-analysis-advanced
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: symphonia-audio-analysis
+  minReplicas: 3
+  maxReplicas: 15
+  metrics:
+  # CPU-based scaling
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  
+  # Memory-based scaling
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+  
+  # Custom metrics
+  - type: Pods
+    pods:
+      metric:
+        name: queue_size
+      target:
+        type: AverageValue
+        averageValue: 10
+  
+  - type: Pods
+    pods:
+      metric:
+        name: processing_time
+      target:
+        type: AverageValue
+        averageValue: 30
+  
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+      - type: Pods
+        value: 3
+        periodSeconds: 60
+      - type: Percent
+        value: 100
+        periodSeconds: 60
+      selectPolicy: Max
+    
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Pods
+        value: 1
+        periodSeconds: 60
+      - type: Percent
+        value: 10
+        periodSeconds: 60
+      selectPolicy: Min
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: symphonia-export-advanced
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: symphonia-export
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+  # CPU-based scaling
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  
+  # Custom metrics
+  - type: Pods
+    pods:
+      metric:
+        name: export_queue_size
+      target:
+        type: AverageValue
+        averageValue: 5
+  
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 30
+      policies:
+      - type: Pods
+        value: 2
+        periodSeconds: 30
+      selectPolicy: Max
+    
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Pods
+        value: 1
+        periodSeconds: 60
+---
+# Prometheus adapter configuration for custom metrics
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-adapter-config
+data:
+  config.yaml: |
+    rules:
+    - seriesQuery: 'symphonia_queue_size'
+      resources:
+        overrides:
+          namespace:
+            resource: "namespace"
+          pod:
+            resource: "pod"
+      name:
+        matches: "queue_size"
+        as: "queue_size"
+    - seriesQuery: 'symphonia_processing_time_seconds'
+      resources:
+        overrides:
+          namespace:
+            resource: "namespace"
+          pod:
+            resource: "pod"
+      name:
+        matches: "processing_time"
+        as: "processing_time"
+    - seriesQuery: 'symphonia_export_queue_size'
+      resources:
+        overrides:
+          namespace:
+            resource: "namespace"
+          pod:
+            resource: "pod"
+      name:
+        matches: "export_queue_size"
+        as: "export_queue_size"
+---
+# KEDA ScaledObject for queue-based scaling
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: symphonia-analysis-scaler
+spec:
+  scaleTargetRef:
+    name: symphonia-audio-analysis
+  minReplicaCount: 3
+  maxReplicaCount: 15
+  triggers:
+  - type: prometheus
+    metadata:
+      serverAddress: http://prometheus.monitoring:9090
+      metricName: symphonia_queue_size
+      threshold: '10'
+      query: sum(symphonia_queue_size{job="symphonia-analysis"})
+  - type: redis
+    metadata:
+      host: redis.symphonia:6379
+      listName: analysis-queue
+      listLength: "10"
+  cooldownPeriod: 300
+  pollingInterval: 30
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: symphonia-export-scaler
+spec:
+  scaleTargetRef:
+    name: symphonia-export
+  minReplicaCount: 2
+  maxReplicaCount: 10
+  triggers:
+  - type: prometheus
+    metadata:
+      serverAddress: http://prometheus.monitoring:9090
+      metricName: symphonia_export_queue_size
+      threshold: '5'
+      query: sum(symphonia_export_queue_size{job="symphonia-export"})
+  cooldownPeriod: 300
+  pollingInterval: 30

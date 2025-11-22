@@ -1,0 +1,47 @@
+global:
+  resolve_timeout: 5m
+  slack_api_url: 'https://hooks.slack.com/services/YOUR_WEBHOOK'
+
+route:
+  group_by: ['severity', 'component']
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+  receiver: 'slack-notifications'
+  routes:
+  - receiver: 'critical-alerts'
+    match:
+      severity: critical
+    continue: true
+  - receiver: 'ml-alerts'
+    match_re:
+      alert: (LowMLAccuracy|MLPredictionErrors)
+    continue: true
+
+receivers:
+- name: 'slack-notifications'
+  slack_configs:
+  - channel: '#symphonia-alerts'
+    send_resolved: true
+    title: '{{ template "slack.title" . }}'
+    text: '{{ template "slack.message" . }}'
+    color: '{{ if eq .Status "resolved" }}good{{ else }}{{ if eq .CommonLabels.severity "critical" }}danger{{ else }}warning{{ end }}{{ end }}'
+
+- name: 'critical-alerts'
+  slack_configs:
+  - channel: '#symphonia-critical'
+    send_resolved: true
+    title: '🚨 CRITICAL ALERT: {{ .CommonLabels.alertname }}'
+    text: '{{ template "slack.message" . }}'
+    color: 'danger'
+
+- name: 'ml-alerts'
+  slack_configs:
+  - channel: '#symphonia-ml'
+    send_resolved: true
+    title: '🧠 ML Alert: {{ .CommonLabels.alertname }}'
+    text: '{{ template "slack.message" . }}'
+    color: 'warning'
+
+templates:
+- '/etc/alertmanager/templates/*.tmpl'

@@ -1,0 +1,83 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: symphonia-export
+  labels:
+    app: symphonia
+    component: export
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: symphonia
+      component: export
+  template:
+    metadata:
+      labels:
+        app: symphonia
+        component: export
+    spec:
+      containers:
+      - name: export-service
+        image: gcr.io/PROJECT_ID/symphonia-export:latest
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1"
+        env:
+        - name: AUTH_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: symphonia-secrets
+              key: export-service-token
+        - name: TEMP_DIR
+          value: "/tmp/exports"
+        ports:
+        - containerPort: 8080
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        volumeMounts:
+        - name: export-storage
+          mountPath: /tmp/exports
+      volumes:
+      - name: export-storage
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: symphonia-export
+spec:
+  selector:
+    app: symphonia
+    component: export
+  ports:
+  - port: 80
+    targetPort: 8080
+  type: ClusterIP
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: symphonia-export
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: symphonia-export
+  minReplicas: 2
+  maxReplicas: 6
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70

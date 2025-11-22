@@ -1,0 +1,52 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: symphonia-ingress
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "600"
+spec:
+  rules:
+  - host: api.symphonia.example.com
+    http:
+      paths:
+      - path: /analyze
+        pathType: Prefix
+        backend:
+          service:
+            name: symphonia-audio-analysis
+            port:
+              number: 80
+      - path: /export
+        pathType: Prefix
+        backend:
+          service:
+            name: symphonia-export
+            port:
+              number: 80
+  tls:
+  - hosts:
+    - api.symphonia.example.com
+    secretName: symphonia-tls
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: symphonia-secrets
+type: Opaque
+data:
+  audio-analysis-token: BASE64_ENCODED_TOKEN
+  export-service-token: BASE64_ENCODED_TOKEN
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: symphonia-config
+data:
+  ANALYZER_CONCURRENCY: "3"
+  EXPORT_CONCURRENCY: "2"
+  MODEL_PATH: "/app/models"
+  TEMP_STORAGE: "/tmp/exports"

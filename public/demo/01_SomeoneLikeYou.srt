@@ -1,0 +1,11 @@
+1
+00:00:05,000 --> 00:00:10,000
+EN: Never mind, I'll find someone like you
+FR: Peu importe, je trouverai quelqu'un comme toi
+ES: No importa, encontraré a alguien como tú
+
+2
+00:01:20,000 --> 00:01:25,000
+EN: Don't forget me, I beg
+FR: Ne m'oublie pas, je t'en prie
+ES: No me olvides, te lo ruego

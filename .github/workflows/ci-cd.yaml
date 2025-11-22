@@ -1,0 +1,290 @@
+name: Symphonia CI/CD
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+          
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+          
+      - name: Run unit tests
+        run: |
+          pytest tests/unit --junitxml=test-results/junit.xml --cov=symphonia --cov-report=xml
+          
+      - name: Run integration tests
+        run: |
+          pytest tests/integration --junitxml=test-results/junit-integration.xml
+          
+      - name: Upload test results
+        uses: actions/upload-artifact@v3
+        with:
+          name: test-results
+          path: test-results/
+          
+      - name: Upload coverage
+        uses: codecov/codecov-action@v3
+        with:
+          file: ./coverage.xml
+          
+  lint:
+    name: Lint Code
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+          
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install black flake8 mypy isort
+          
+      - name: Run linters
+        run: |
+          black --check .
+          flake8 .
+          mypy symphonia
+          isort --check-only --diff .
+          
+  build:
+    name: Build and Push Images
+    needs: [test, lint]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+        
+      - name: Log in to registry
+        uses: docker/login-action@v2
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+          
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v4
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          
+      - name: Build and push API image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: docker/api.Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}-api
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          
+      - name: Build and push Worker image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: docker/worker.Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}-worker
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          
+      - name: Build and push ML Service image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: docker/ml-service.Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}-ml
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          
+  deploy-staging:
+    name: Deploy to Staging
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    environment: staging
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Set up Kubernetes tools
+        uses: azure/setup-kubectl@v3
+        
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-west-2
+          
+      - name: Update kubeconfig
+        run: |
+          aws eks update-kubeconfig --name symphonia-staging --region us-west-2
+          
+      - name: Deploy to staging
+        run: |
+          helm upgrade --install symphonia ./helm \
+            --namespace symphonia-staging \
+            --values ./helm/values-staging.yaml \
+            --set image.tag=${{ github.sha }}
+            
+      - name: Run smoke tests
+        run: |
+          pytest tests/smoke --staging
+          
+  deploy-production:
+    name: Deploy to Production
+    needs: deploy-staging
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    environment:
+      name: production
+      url: https://api.symphonia.ai
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Set up Kubernetes tools
+        uses: azure/setup-kubectl@v3
+        
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-west-2
+          
+      - name: Update kubeconfig
+        run: |
+          aws eks update-kubeconfig --name symphonia-prod --region us-west-2
+          
+      - name: Deploy to production
+        run: |
+          helm upgrade --install symphonia ./helm \
+            --namespace symphonia \
+            --values ./helm/values-prod.yaml \
+            --set image.tag=${{ github.sha }}
+            
+      - name: Verify deployment
+        run: |
+          kubectl rollout status deployment/symphonia-api -n symphonia
+          kubectl rollout status deployment/symphonia-worker -n symphonia
+          kubectl rollout status deployment/symphonia-ml -n symphonia
+          
+      - name: Run smoke tests
+        run: |
+          pytest tests/smoke --production
+
+  ml-train:
+    name: Train ML Models
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
+    environment: ${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+          
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-ml.txt
+          
+      - name: Configure GCP credentials
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+          
+      - name: Set up MLflow tracking
+        run: |
+          export MLFLOW_TRACKING_URI=${{ secrets.MLFLOW_TRACKING_URI }}
+          export MLFLOW_TRACKING_USERNAME=${{ secrets.MLFLOW_USERNAME }}
+          export MLFLOW_TRACKING_PASSWORD=${{ secrets.MLFLOW_PASSWORD }}
+          
+      - name: Train models
+        run: |
+          python ml/train.py \
+            --config ml/config/experiments.yaml \
+            --env ${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}
+            
+      - name: Run model validation
+        run: |
+          python ml/validate.py \
+            --models genre,mood \
+            --dataset validation \
+            --metrics accuracy,f1,latency
+            
+      - name: Deploy models
+        if: success()
+        run: |
+          python ml/deploy.py \
+            --env ${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }} \
+            --strategy blue_green
+            
+  notify:
+    name: Send Notifications
+    needs: [deploy-production, ml-train]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Send Slack notification
+        uses: rtCamp/action-slack-notify@v2
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+          SLACK_CHANNEL: symphonia-deploys
+          SLACK_COLOR: ${{ job.status }}
+          SLACK_TITLE: Deployment Status
+          SLACK_MESSAGE: |
+            Environment: ${{ github.ref == 'refs/heads/main' && 'Production' || 'Staging' }}
+            Status: ${{ job.status }}
+            Commit: ${{ github.sha }}
+            Author: ${{ github.actor }}
+            
+      - name: Update deployment tracking
+        if: success()
+        run: |
+          curl -X POST ${{ secrets.DEPLOYMENT_TRACKER_URL }} \
+            -H "Content-Type: application/json" \
+            -d '{
+              "environment": "${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}",
+              "status": "success",
+              "version": "${{ github.sha }}",
+              "timestamp": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+            }'

@@ -1,0 +1,11 @@
+1
+00:00:10,000 --> 00:00:15,000
+EN: You shoot me down, but I won't fall
+FR: Tu me tires dessus, mais je ne tomberai pas
+ES: Me disparas, pero no caeré
+
+2
+00:01:40,000 --> 00:01:45,000
+EN: I am titanium
+FR: Je suis titane
+ES: Soy titanio

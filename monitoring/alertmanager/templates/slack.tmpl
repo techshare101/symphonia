@@ -1,0 +1,30 @@
+{{ define "slack.title" }}
+[{{ .Status | toUpper }}{{ if eq .Status "firing" }}:{{ .Alerts.Firing | len }}{{ end }}] {{ .CommonLabels.alertname }}
+{{ end }}
+
+{{ define "slack.message" }}
+{{ if gt (len .Alerts.Firing) 0 }}
+*Alerts Firing:*
+{{ range .Alerts.Firing }}
+• {{ .Labels.instance }}: {{ .Annotations.description }}
+  - Severity: {{ .Labels.severity }}
+  - Component: {{ .Labels.component }}
+  - Started: {{ .StartsAt | since }}
+{{ if .Annotations.runbook }}  - Runbook: {{ .Annotations.runbook }}{{ end }}
+{{ end }}
+{{ end }}
+
+{{ if gt (len .Alerts.Resolved) 0 }}
+*Alerts Resolved:*
+{{ range .Alerts.Resolved }}
+• {{ .Labels.instance }}: {{ .Annotations.description }}
+  - Resolved: {{ .EndsAt | since }}
+{{ end }}
+{{ end }}
+
+{{ if or .CommonAnnotations.summary .CommonAnnotations.message }}
+*Additional Info:*
+{{ if .CommonAnnotations.summary }}Summary: {{ .CommonAnnotations.summary }}{{ end }}
+{{ if .CommonAnnotations.message }}Message: {{ .CommonAnnotations.message }}{{ end }}
+{{ end }}
+{{ end }}

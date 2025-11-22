@@ -1,0 +1,97 @@
+groups:
+- name: symphonia-alerts
+  rules:
+  # Queue alerts
+  - alert: HighQueueSize
+    expr: symphonia_queue_size > 50
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      summary: High queue size
+      description: "Queue size {{ $value }} is above threshold (50)"
+
+  - alert: QueueProcessingDelay
+    expr: symphonia_processing_time_seconds > 300
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      summary: Long processing time
+      description: "Processing time {{ $value }}s is above threshold (300s)"
+
+  # Resource alerts
+  - alert: HighCPUUsage
+    expr: container_cpu_usage_seconds_total{app="symphonia"} > 0.8
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      summary: High CPU usage
+      description: "CPU usage {{ $value }} is above threshold (80%)"
+
+  - alert: HighMemoryUsage
+    expr: container_memory_usage_bytes{app="symphonia"} / container_memory_limit_bytes > 0.8
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      summary: High memory usage
+      description: "Memory usage {{ $value }} is above threshold (80%)"
+
+  # Error alerts
+  - alert: HighErrorRate
+    expr: rate(symphonia_errors_total[5m]) > 0.1
+    for: 5m
+    labels:
+      severity: critical
+    annotations:
+      summary: High error rate
+      description: "Error rate {{ $value }} is above threshold (10%)"
+
+  - alert: MLPredictionErrors
+    expr: rate(symphonia_ml_prediction_errors_total[5m]) > 0.05
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      summary: High ML prediction error rate
+      description: "ML prediction error rate {{ $value }} is above threshold (5%)"
+
+  # Service health
+  - alert: ServiceDown
+    expr: up{app="symphonia"} == 0
+    for: 1m
+    labels:
+      severity: critical
+    annotations:
+      summary: "Service {{ $labels.component }} is down"
+      description: "Service has been down for more than 1 minute"
+
+  - alert: PodRestarting
+    expr: rate(kube_pod_container_status_restarts_total{app="symphonia"}[5m]) > 0
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      summary: "Pod {{ $labels.pod }} is restarting"
+      description: "Pod has restarted {{ $value }} times in 5 minutes"
+
+  # ML model performance
+  - alert: LowMLAccuracy
+    expr: symphonia_ml_accuracy < 0.8
+    for: 15m
+    labels:
+      severity: warning
+    annotations:
+      summary: "Low ML model accuracy"
+      description: "ML model accuracy {{ $value }} is below threshold (80%)"
+
+  - alert: HighMLLatency
+    expr: symphonia_ml_prediction_latency_seconds > 2
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      summary: "High ML prediction latency"
+      description: "ML prediction latency {{ $value }}s is above threshold (2s)"
