@@ -31,6 +31,10 @@ interface Track {
         arousal: number;
         class: string;
     };
+    downloadURL?: string;
+    storageUrl?: string; // Standardized field
+    storagePath?: string;
+    localPath?: string;
 }
 
 export default function SetlistBuilderPage() {
@@ -179,6 +183,30 @@ export default function SetlistBuilderPage() {
         toast.success('Setlist optimized!', { id: 'optimize' });
     };
 
+    const handleSave = async () => {
+        if (!generatedSetlist || !user) return;
+
+        try {
+            toast.loading('Saving setlist...');
+            const { addDoc, serverTimestamp } = await import('firebase/firestore');
+
+            await addDoc(collection(db, 'setlists'), {
+                title: `Setlist ${new Date().toLocaleString()}`,
+                createdBy: user.uid,
+                createdAt: serverTimestamp(),
+                trackOrder: generatedSetlist.map(t => t.id),
+                arcType: selectedArc
+            });
+
+            toast.dismiss();
+            toast.success('Setlist saved to library!');
+        } catch (error) {
+            console.error('Error saving setlist:', error);
+            toast.dismiss();
+            toast.error('Failed to save setlist');
+        }
+    };
+
     const handleExport = async (type: 'm3u' | 'srt') => {
         if (!generatedSetlist) return;
 
@@ -206,6 +234,7 @@ export default function SetlistBuilderPage() {
             toast.success(`${type.toUpperCase()} exported!`);
         } catch (error) {
             console.error('Export error:', error);
+            toast.dismiss();
             toast.error('Export failed');
         }
     };
@@ -358,6 +387,13 @@ export default function SetlistBuilderPage() {
                                         >
                                             <SparklesIcon className="w-4 h-4" />
                                             Auto-Optimize
+                                        </button>
+                                        <button
+                                            onClick={handleSave}
+                                            className="btn-primary text-sm flex items-center gap-2 py-2 px-4 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500"
+                                        >
+                                            <QueueListIcon className="w-4 h-4" />
+                                            Save to Library
                                         </button>
                                         <button
                                             onClick={() => handleExport('m3u')}

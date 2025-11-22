@@ -56,6 +56,7 @@ export async function uploadTrack(file: File, userId: string, trackId: string) {
     const trackRef = doc(db, 'tracks', trackId);
     await updateDoc(trackRef, {
       downloadURL,
+      storageUrl: downloadURL, // Standardized field
       status: 'uploaded',
       size: file.size,
       type: file.type,
@@ -85,6 +86,7 @@ export async function getUserTracks(userId: string) {
         filename: data?.filename ?? docSnapshot.id,
         bpm: typeof data?.bpm === 'number' ? data.bpm : undefined,
         key: typeof data?.key === 'string' ? data.key : undefined,
+        storageUrl: data?.storageUrl || data?.downloadURL, // Support both
       };
     });
   } catch (error) {
@@ -105,7 +107,24 @@ export async function startBatchProcessing({ trackIds }: BatchProcessingParams) 
   };
 }
 
-export async function simulateTrackAnalysis(trackId: string) {
+export async function updateTrackDualPaths(trackId: string, localPath: string, storagePath: string, downloadURL: string) {
+  try {
+    const trackRef = doc(db, 'tracks', trackId);
+    await updateDoc(trackRef, {
+      localPath,
+      storagePath,
+      downloadURL,
+      storageUrl: downloadURL, // Standardized field for Full Production Patch
+      status: 'uploaded',
+      updatedAt: serverTimestamp()
+    });
+  } catch (error) {
+    console.error('Error updating track paths:', error);
+    throw error;
+  }
+}
+
+export async function simulateTrackAnalysis(trackId: string, localPath?: string) {
   try {
     const trackRef = doc(db, 'tracks', trackId);
 
@@ -132,6 +151,7 @@ export async function simulateTrackAnalysis(trackId: string) {
       energy,
       duration,
       analyzedAt: serverTimestamp(),
+      localPath: localPath || trackData?.localPath, // Persist or update localPath
 
       // Enhanced metadata
       energyCurve: analysis.energyCurve,

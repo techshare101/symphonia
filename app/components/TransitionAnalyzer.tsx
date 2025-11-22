@@ -15,7 +15,7 @@ interface Track {
     id: string;
     title: string;
     artist?: string;
-    bpm: number;
+    bpm?: number;
     harmonic?: {
         key: string;
         musicalKey: string;
@@ -36,8 +36,10 @@ export default function TransitionAnalyzer({ track1, track2, className = '' }: T
     // Calculate compatibility scores
     const analysis = useMemo(() => {
         // BPM Compatibility (±6% is perfect for mixing)
-        const bpmDelta = Math.abs(track1.bpm - track2.bpm);
-        const bpmDeltaPercent = (bpmDelta / track1.bpm) * 100;
+        const bpm1 = track1.bpm || 120;
+        const bpm2 = track2.bpm || 120;
+        const bpmDelta = Math.abs(bpm1 - bpm2);
+        const bpmDeltaPercent = (bpmDelta / bpm1) * 100;
         const bpmScore = Math.max(0, 100 - (bpmDeltaPercent * 16.67)); // 6% = 100 points
 
         // Key Compatibility (Camelot wheel)

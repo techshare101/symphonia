@@ -57,23 +57,53 @@ export default function BatchUpload() {
     try {
       const trackIds = [];
 
-      // Upload files in parallel using real Firebase Storage
+      // Upload files in parallel using Dual-Mode (Local + Cloud)
       const uploads = Array.from(files).map(async (file) => {
         // 1. Create initial record
         const trackId = await createTrackRecord(file.name, user.uid);
 
-        // 2. Upload to Firebase Storage (User-specific path)
-        await uploadTrack(file, user.uid, trackId);
+        // 2. Start Parallel Uploads
+        const storagePath = `tracks/${user.uid}/${file.name}`;
 
-        // 3. Simulate immediate analysis (Client-side update)
-        await simulateTrackAnalysis(trackId);
+        // A. Firebase Storage Upload
+        const firebaseUploadPromise = uploadTrack(file, user.uid, trackId);
+
+        // B. Local Server Upload (for zero-latency analysis)
+        const formData = new FormData();
+        formData.append('file', file);
+        const localUploadPromise = fetch('/api/upload', {
+          method: 'POST',
+          body: formData
+        }).then(res => res.json());
+
+        // Wait for both
+        const [downloadURL, localResult] = await Promise.all([
+          firebaseUploadPromise,
+          localUploadPromise
+        ]);
+
+        if (!localResult.success) {
+          console.warn('Local upload failed, falling back to cloud only:', localResult.error);
+        }
+
+        // 3. Update Firestore with Dual Paths
+        const { updateTrackDualPaths } = await import('@/firebase/utils');
+        await updateTrackDualPaths(
+          trackId,
+          localResult.localPath || '', // Use empty string if local failed
+          storagePath,
+          downloadURL
+        );
+
+        // 4. Simulate immediate analysis (using local path if available)
+        await simulateTrackAnalysis(trackId, localResult.localPath);
 
         trackIds.push(trackId);
       });
 
       await Promise.all(uploads);
 
-      toast.success('Tracks uploaded and processed successfully!');
+      toast.success('Tracks uploaded and processed in Dual-Mode!');
       setFiles(null);
 
     } catch (error) {

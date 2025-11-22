@@ -11,6 +11,9 @@ interface Track {
     artist?: string;
     bpm?: number;
     key?: string;
+    downloadURL?: string;
+    storagePath?: string;
+    localPath?: string;
 }
 
 interface Setlist {

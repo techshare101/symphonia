@@ -12,11 +12,35 @@ export async function POST(request: Request) {
             let content = '#EXTM3U\n';
             tracks.forEach((track: any) => {
                 content += `#EXTINF:${track.duration || 0},${track.artist || 'Unknown'} - ${track.title}\n`;
-                // Use absolute URL for local simulation so external players can find it
-                // URL encode the filename to handle spaces and special characters
-                // Note: In simulation, we assume the file is in public/uploads and served via Next.js public folder
-                // Also assuming port 3000 for default Next.js dev server
-                content += `http://localhost:3000/uploads/${encodeURIComponent(track.title)}\n`;
+
+                // Dual-Mode Export Logic:
+                // 1. Priority: Firebase Storage URL (Universal access) - Standardized field 'storageUrl'
+                // 2. Fallback: downloadURL (Backward compatibility)
+                // 3. Fallback: Local Path (if available and no cloud URL)
+                // 4. Last Resort: Simulated Localhost URL
+
+                let fileUrl = track.storageUrl || track.downloadURL;
+
+                if (!fileUrl && track.localPath) {
+                    // If no cloud URL, use local path
+                    fileUrl = track.localPath;
+                }
+
+                // Ensure absolute URL for relative paths
+                if (fileUrl && fileUrl.startsWith('/')) {
+                    const host = request.headers.get('host') || 'localhost:3000';
+                    const protocol = host.includes('localhost') ? 'http' : 'https';
+                    fileUrl = `${protocol}://${host}${fileUrl}`;
+                }
+
+                if (!fileUrl) {
+                    // Fallback for simulation/legacy
+                    const host = request.headers.get('host') || 'localhost:3000';
+                    const protocol = host.includes('localhost') ? 'http' : 'https';
+                    fileUrl = `${protocol}://${host}/uploads/${encodeURIComponent(track.title)}.mp3`;
+                }
+
+                content += `${fileUrl}\n`;
             });
 
             return new NextResponse(content, {

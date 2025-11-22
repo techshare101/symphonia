@@ -9,6 +9,7 @@ import DJLibrarySidebar from './components/DJLibrarySidebar';
 import SetlistLoader from './components/SetlistLoader';
 import DeckQueue from './components/DeckQueue';
 import { AutoDJMasterController, AutoDJMode } from './engine';
+import { generateEnhancedAnalysis } from '@/lib/audioAnalysis';
 
 interface Track {
     id: string;
@@ -18,7 +19,9 @@ interface Track {
     key?: string;
     duration?: number;
     downloadURL?: string;
+    storageUrl?: string; // Standardized field
     storagePath?: string;
+    localPath?: string; // Added for Dual-Mode
     energyCurve?: number[];
     beatGrid?: { time: number; confidence: number }[];
     structure?: {
@@ -93,11 +96,33 @@ export default function DJModePage() {
 
     // Load track to deck
     const loadTrackToDeck = (track: Track, deck: 'A' | 'B') => {
-        const audioSrc = track.downloadURL || (track.storagePath ? `/uploads/${track.storagePath.split('/').pop()}` : '');
+        // Dual-Mode Logic: Prioritize local file in Dev, Cloud in Prod
+        // Full Production Patch: Prefer storageUrl if available
+        const isDev = process.env.NODE_ENV === 'development';
+        const filename = track.localPath?.split(/[\\/]/).pop() || track.storagePath?.split('/').pop() || `${track.title}.mp3`;
+        const localUrl = `/uploads/${filename}`;
+
+        // Use local URL if in dev AND local path exists
+        // Otherwise use storageUrl (primary) -> downloadURL (fallback) -> localUrl (last resort)
+        const cloudUrl = track.storageUrl || track.downloadURL;
+        const audioSrc = (isDev && track.localPath) ? localUrl : (cloudUrl || localUrl);
+
+        // Generate analysis if missing
+        let trackWithAnalysis = { ...track };
+        if (!trackWithAnalysis.energyCurve || !trackWithAnalysis.beatGrid) {
+            const analysis = generateEnhancedAnalysis(
+                track.title,
+                track.duration || 180,
+                track.bpm || 128,
+                track.key || '8A',
+                0.8
+            );
+            trackWithAnalysis = { ...trackWithAnalysis, ...analysis };
+        }
 
         if (deck === 'A') {
             setDeckA({
-                track,
+                track: trackWithAnalysis,
                 isPlaying: false,
                 currentTime: 0,
                 volume: deckA.volume
@@ -109,7 +134,7 @@ export default function DJModePage() {
             toast.success(`${track.title} loaded to Deck A`);
         } else {
             setDeckB({
-                track,
+                track: trackWithAnalysis,
                 isPlaying: false,
                 currentTime: 0,
                 volume: deckB.volume
@@ -269,10 +294,55 @@ export default function DJModePage() {
 
         ctx.clearRect(0, 0, width, height);
 
+        // Draw Structure (Background)
+        if (track.structure) {
+            // Intro (Cyan tint)
+            if (track.structure.intro) {
+                const introEnd = (track.structure.intro.end / duration) * width;
+                const gradient = ctx.createLinearGradient(0, 0, introEnd, 0);
+                gradient.addColorStop(0, 'rgba(6, 182, 212, 0.2)');
+                gradient.addColorStop(1, 'rgba(6, 182, 212, 0.05)');
+                ctx.fillStyle = gradient;
+                ctx.fillRect(0, 0, introEnd, height);
+            }
+
+            // Outro (Pink tint)
+            if (track.structure.outro) {
+                const outroStart = (track.structure.outro.start / duration) * width;
+                const gradient = ctx.createLinearGradient(outroStart, 0, width, 0);
+                gradient.addColorStop(0, 'rgba(236, 72, 153, 0.05)');
+                gradient.addColorStop(1, 'rgba(236, 72, 153, 0.2)');
+                ctx.fillStyle = gradient;
+                ctx.fillRect(outroStart, 0, width - outroStart, height);
+            }
+
+            // Drop (Yellow highlight)
+            if (track.structure.drop) {
+                const dropX = (track.structure.drop / duration) * width;
+                ctx.fillStyle = 'rgba(234, 179, 8, 0.3)';
+                ctx.fillRect(dropX - 2, 0, 4, height);
+            }
+        }
+
+        // Draw Beatgrid
+        if (track.beatGrid) {
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            track.beatGrid.forEach(beat => {
+                const x = (beat.time / duration) * width;
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, height);
+            });
+            ctx.stroke();
+        }
+
         // Draw energy curve
         ctx.beginPath();
         ctx.strokeStyle = '#06b6d4';
         ctx.lineWidth = 2;
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = '#06b6d4';
 
         track.energyCurve.forEach((energy, i) => {
             const x = (i / (track.energyCurve!.length - 1)) * width;
@@ -287,6 +357,32 @@ export default function DJModePage() {
         });
 
         ctx.stroke();
+        ctx.shadowBlur = 0;
+
+        // Draw Cue Points
+        if (track.cuePoints) {
+            const drawCue = (time: number, color: string, label: string) => {
+                const x = (time / duration) * width;
+
+                // Line
+                ctx.strokeStyle = color;
+                ctx.lineWidth = 2;
+                ctx.setLineDash([4, 4]);
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, height);
+                ctx.stroke();
+                ctx.setLineDash([]);
+
+                // Label
+                ctx.fillStyle = color;
+                ctx.font = 'bold 10px monospace';
+                ctx.fillText(label, x + 4, 12);
+            };
+
+            if (track.cuePoints.mixIn) drawCue(track.cuePoints.mixIn, '#22c55e', 'IN');
+            if (track.cuePoints.mixOut) drawCue(track.cuePoints.mixOut, '#ef4444', 'OUT');
+        }
 
         // Draw playhead
         const playheadX = (currentTime / duration) * width;
@@ -414,8 +510,8 @@ export default function DJModePage() {
                             onClick={toggleAutoDJ}
                             disabled={queue.length === 0}
                             className={`px-4 py-2 text-sm font-bold rounded-lg transition-all flex items-center gap-2 ${autoDJEnabled
-                                    ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white hover:from-purple-500 hover:to-pink-500 shadow-[0_0_20px_rgba(168,85,247,0.4)]'
-                                    : 'bg-gradient-to-r from-cyan-600/50 to-blue-600/50 text-white hover:from-cyan-600 hover:to-blue-600 disabled:opacity-30 disabled:cursor-not-allowed'
+                                ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white hover:from-purple-500 hover:to-pink-500 shadow-[0_0_20px_rgba(168,85,247,0.4)]'
+                                : 'bg-gradient-to-r from-cyan-600/50 to-blue-600/50 text-white hover:from-cyan-600 hover:to-blue-600 disabled:opacity-30 disabled:cursor-not-allowed'
                                 }`}
                         >
                             <SparklesIcon className="w-5 h-5" />
@@ -435,19 +531,19 @@ export default function DJModePage() {
                 {/* Decks */}
                 <div className="flex-1 grid grid-rows-2 gap-4 p-4">
                     {/* Deck A */}
-                    <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-2xl p-6 flex flex-col">
-                        <div className="flex items-center justify-between mb-4">
+                    <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-2xl p-3 flex flex-col min-h-0">
+                        <div className="flex items-center justify-between mb-2">
                             <div className="flex items-center gap-3">
-                                <span className="text-3xl font-bold text-cyan-400">DECK A</span>
+                                <span className="text-2xl font-bold text-cyan-400">DECK A</span>
                                 {deckA.track && (
                                     <div>
-                                        <p className="text-xl font-bold text-white">{deckA.track.title}</p>
-                                        <p className="text-sm text-slate-400">{deckA.track.artist || 'Unknown'}</p>
+                                        <p className="text-lg font-bold text-white truncate max-w-[200px]">{deckA.track.title}</p>
+                                        <p className="text-xs text-slate-400 truncate max-w-[200px]">{deckA.track.artist || 'Unknown'}</p>
                                     </div>
                                 )}
                             </div>
                             {deckA.track && (
-                                <div className="flex gap-4 text-sm font-mono">
+                                <div className="flex gap-4 text-xs font-mono">
                                     <span className="text-cyan-400">{deckA.track.bpm} BPM</span>
                                     <span className="text-purple-400">{deckA.track.harmonic?.key || deckA.track.key}</span>
                                 </div>
@@ -455,7 +551,7 @@ export default function DJModePage() {
                         </div>
 
                         {/* Waveform */}
-                        <div className="flex-1 relative bg-black/40 rounded-xl overflow-hidden">
+                        <div className="flex-1 relative bg-black/40 rounded-xl overflow-hidden min-h-0">
                             {deckA.track ? (
                                 <canvas ref={canvasRefA} className="w-full h-full" />
                             ) : (
@@ -466,35 +562,35 @@ export default function DJModePage() {
                         </div>
 
                         {/* Controls */}
-                        <div className="flex items-center justify-center gap-4 mt-4">
+                        <div className="flex items-center justify-center gap-4 mt-2">
                             <button
                                 onClick={() => togglePlayPause('A')}
                                 disabled={!deckA.track}
-                                className="w-16 h-16 rounded-full bg-gradient-to-r from-cyan-500 to-blue-600 flex items-center justify-center shadow-[0_0_30px_rgba(6,182,212,0.4)] hover:scale-105 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                                className="w-12 h-12 rounded-full bg-gradient-to-r from-cyan-500 to-blue-600 flex items-center justify-center shadow-[0_0_30px_rgba(6,182,212,0.4)] hover:scale-105 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
                             >
                                 {deckA.isPlaying ? (
-                                    <PauseIcon className="w-8 h-8 text-white" />
+                                    <PauseIcon className="w-6 h-6 text-white" />
                                 ) : (
-                                    <PlayIcon className="w-8 h-8 text-white ml-1" />
+                                    <PlayIcon className="w-6 h-6 text-white ml-1" />
                                 )}
                             </button>
                         </div>
                     </div>
 
                     {/* Deck B */}
-                    <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-2xl p-6 flex flex-col">
-                        <div className="flex items-center justify-between mb-4">
+                    <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-2xl p-3 flex flex-col min-h-0">
+                        <div className="flex items-center justify-between mb-2">
                             <div className="flex items-center gap-3">
-                                <span className="text-3xl font-bold text-purple-400">DECK B</span>
+                                <span className="text-2xl font-bold text-purple-400">DECK B</span>
                                 {deckB.track && (
                                     <div>
-                                        <p className="text-xl font-bold text-white">{deckB.track.title}</p>
-                                        <p className="text-sm text-slate-400">{deckB.track.artist || 'Unknown'}</p>
+                                        <p className="text-lg font-bold text-white truncate max-w-[200px]">{deckB.track.title}</p>
+                                        <p className="text-xs text-slate-400 truncate max-w-[200px]">{deckB.track.artist || 'Unknown'}</p>
                                     </div>
                                 )}
                             </div>
                             {deckB.track && (
-                                <div className="flex gap-4 text-sm font-mono">
+                                <div className="flex gap-4 text-xs font-mono">
                                     <span className="text-cyan-400">{deckB.track.bpm} BPM</span>
                                     <span className="text-purple-400">{deckB.track.harmonic?.key || deckB.track.key}</span>
                                 </div>
@@ -502,7 +598,7 @@ export default function DJModePage() {
                         </div>
 
                         {/* Waveform */}
-                        <div className="flex-1 relative bg-black/40 rounded-xl overflow-hidden">
+                        <div className="flex-1 relative bg-black/40 rounded-xl overflow-hidden min-h-0">
                             {deckB.track ? (
                                 <canvas ref={canvasRefB} className="w-full h-full" />
                             ) : (
@@ -513,16 +609,16 @@ export default function DJModePage() {
                         </div>
 
                         {/* Controls */}
-                        <div className="flex items-center justify-center gap-4 mt-4">
+                        <div className="flex items-center justify-center gap-4 mt-2">
                             <button
                                 onClick={() => togglePlayPause('B')}
                                 disabled={!deckB.track}
-                                className="w-16 h-16 rounded-full bg-gradient-to-r from-purple-500 to-pink-600 flex items-center justify-center shadow-[0_0_30px_rgba(168,85,247,0.4)] hover:scale-105 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                                className="w-12 h-12 rounded-full bg-gradient-to-r from-purple-500 to-pink-600 flex items-center justify-center shadow-[0_0_30px_rgba(168,85,247,0.4)] hover:scale-105 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
                             >
                                 {deckB.isPlaying ? (
-                                    <PauseIcon className="w-8 h-8 text-white" />
+                                    <PauseIcon className="w-6 h-6 text-white" />
                                 ) : (
-                                    <PlayIcon className="w-8 h-8 text-white ml-1" />
+                                    <PlayIcon className="w-6 h-6 text-white ml-1" />
                                 )}
                             </button>
                         </div>
